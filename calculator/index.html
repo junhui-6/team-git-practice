@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>计算器 - 模块5 异常与边界处理</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f5f5f5;
+    padding: 24px;
+    color: #222;
+  }
+  .wrap { max-width: 520px; margin: 0 auto; }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .sub { color: #666; font-size: 13px; margin-bottom: 20px; line-height: 1.6; }
+  .display {
+    background: #1f2937;
+    color: #fff;
+    border-radius: 8px;
+    padding: 18px 20px;
+    text-align: right;
+    margin-bottom: 12px;
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+  .display .expr { font-size: 13px; color: #9ca3af; min-height: 18px; word-break: break-all; }
+  .display .curr { font-size: 32px; font-weight: 500; word-break: break-all; line-height: 1.2; }
+  .display.error .curr { color: #fca5a5; font-size: 22px; }
+  .keys {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  button {
+    border: none;
+    background: #fff;
+    color: #222;
+    font-size: 18px;
+    padding: 18px 0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.12s;
+    font-family: inherit;
+  }
+  button:hover { background: #e5e7eb; }
+  button:active { background: #d1d5db; }
+  button.op { background: #eff6ff; color: #185fa5; }
+  button.op:hover { background: #dbeafe; }
+  button.eq { background: #185fa5; color: #fff; }
+  button.eq:hover { background: #0c447c; }
+  button.fn { background: #fef3c7; color: #854f0b; }
+  button.fn:hover { background: #fde68a; }
+  button.span2 { grid-column: span 2; }
+  .tests {
+    margin-top: 24px;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 16px;
+  }
+  .tests h2 { font-size: 14px; font-weight: 600; margin-bottom: 10px; color: #444; }
+  .tests .row { display: flex; gap: 8px; margin-bottom: 10px; align-items: flex-start; }
+  .tests .label { flex: 1; font-size: 12px; color: #555; line-height: 1.5; padding-top: 6px; }
+  .tests .label b { color: #185fa5; }
+  .tests button { padding: 8px 12px; font-size: 12px; background: #f3f4f6; }
+  .tests button:hover { background: #e5e7eb; }
+  .note {
+    margin-top: 20px;
+    background: #fff;
+    border-left: 3px solid #185fa5;
+    padding: 12px 16px;
+    font-size: 12px;
+    color: #555;
+    line-height: 1.7;
+    border-radius: 0 6px 6px 0;
+  }
+  .note b { color: #222; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>计算器 · 模块5 异常与边界处理</h1>
+  <div class="sub">演示 #15【模块5】4 个边界场景：除以零、超大数字/溢出、连续按等号、未输入数字直接按运算符。基础 UI/输入/运算为最小可演示实现。</div>
+
+  <div class="display" id="display">
+    <div class="expr" id="expr"></div>
+    <div class="curr" id="curr">0</div>
+  </div>
+
+  <div class="keys">
+    <button class="fn" onclick="clearAll()">C</button>
+    <button class="fn" onclick="backspace()">←</button>
+    <button class="op" onclick="inputOp('/')">÷</button>
+    <button class="op" onclick="inputOp('*')">×</button>
+
+    <button onclick="inputDigit('7')">7</button>
+    <button onclick="inputDigit('8')">8</button>
+    <button onclick="inputDigit('9')">9</button>
+    <button class="op" onclick="inputOp('-')">−</button>
+
+    <button onclick="inputDigit('4')">4</button>
+    <button onclick="inputDigit('5')">5</button>
+    <button onclick="inputDigit('6')">6</button>
+    <button class="op" onclick="inputOp('+')">+</button>
+
+    <button onclick="inputDigit('1')">1</button>
+    <button onclick="inputDigit('2')">2</button>
+    <button onclick="inputDigit('3')">3</button>
+    <button class="eq" onclick="equal()">=</button>
+
+    <button onclick="inputDigit('0')" class="span2">0</button>
+    <button onclick="inputDigit('.')">.</button>
+  </div>
+
+  <div class="tests">
+    <h2>边界场景一键演示</h2>
+
+    <div class="row">
+      <div class="label"><b>场景1 · 除以零</b>：1 ÷ 0 = 应显示友好错误，不崩溃</div>
+      <button onclick="runTest('divzero')">运行</button>
+    </div>
+    <div class="row">
+      <div class="label"><b>场景2 · 超大数字/溢出</b>：9999999999 × 9999999999 = 应科学计数法或提示</div>
+      <button onclick="runTest('overflow')">运行</button>
+    </div>
+    <div class="row">
+      <div class="label"><b>场景3 · 连续按等号</b>：5 + 3 = = = 重复上次运算（每次 +3 → 11、14、17）</div>
+      <button onclick="runTest('repeatEq')">运行</button>
+    </div>
+    <div class="row">
+      <div class="label"><b>场景4 · 未输入数字直接按运算符</b>：开机后直接按 ÷ + −，应忽略并提示</div>
+      <button onclick="runTest('emptyOp')">运行</button>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>边界处理定义：</b><br>
+    1. 除以零：result 设为 Error，显示屏变红，需按 C 重置<br>
+    2. 超大数字/溢出：结果 ≥ 1e21 或非有限数时，用科学计数法 toExponential(8) 显示<br>
+    3. 连续按等号：记录上次运算 (prevOp, prevOperand)，按 = 时若 currentInput 为空且上次是 equal，则重复 prevOp 运算<br>
+    4. 空输入按运算符：若 previousValue 为空且 currentInput 为空，忽略运算符并闪烁提示
+  </div>
+</div>
+
+<script>
+  // 计算器状态
+  const state = {
+    currentInput: '',       // 当前正在输入的数字字符串
+    previousValue: null,    // 上一个操作数（已确认）
+    operator: null,         // 当前运算符
+    lastOp: null,           // 上次执行的运算符（用于连续等号）
+    lastOperand: null,      // 上次执行的第二操作数（用于连续等号）
+    justEvaluated: false,   // 刚按完等号
+    isError: false
+  };
+
+  const display = document.getElementById('display');
+  const currEl = document.getElementById('curr');
+  const exprEl = document.getElementById('expr');
+
+  function render() {
+    display.classList.toggle('error', state.isError);
+    if (state.isError) {
+      currEl.textContent = state.currentInput || 'Error';
+    } else {
+      currEl.textContent = state.currentInput || (state.previousValue !== null ? state.previousValue : '0');
+    }
+    let expr = '';
+    if (state.previousValue !== null && state.operator) {
+      const sym = { '+':'+', '-':'−', '*':'×', '/':'÷' }[state.operator];
+      expr = `${formatNum(state.previousValue)} ${sym}`;
+    }
+    exprEl.textContent = expr;
+  }
+
+  function formatNum(n) {
+    if (n === null || n === undefined) return '';
+    if (typeof n !== 'number') return String(n);
+    if (!isFinite(n)) return 'Error';
+    const abs = Math.abs(n);
+    // 场景2：超过 Number.MAX_SAFE_INTEGER (~9e15) 用科学计数法
+    if (abs !== 0 && (abs >= 1e16 || abs < 1e-6)) {
+      return n.toExponential(8);
+    }
+    return String(n);
+  }
+
+  function inputDigit(d) {
+    if (state.isError) clearAll();
+    if (state.justEvaluated) {
+      // 按完等号后输入数字 → 开启新计算
+      state.previousValue = null;
+      state.operator = null;
+      state.lastOp = null;
+      state.lastOperand = null;
+      state.currentInput = '';
+      state.justEvaluated = false;
+    }
+    if (d === '.') {
+      if (state.currentInput.includes('.')) return; // 防止多个小数点
+      if (state.currentInput === '') state.currentInput = '0.';
+      else state.currentInput += '.';
+    } else {
+      if (state.currentInput === '0') state.currentInput = d;
+      else state.currentInput += d;
+    }
+    render();
+  }
+
+  function inputOp(op) {
+    if (state.isError) return;
+    // 场景4：未输入数字直接按运算符
+    if (state.currentInput === '' && state.previousValue === null) {
+      flashHint('请先输入数字');
+      return;
+    }
+    // 连续运算符：替换
+    if (state.currentInput === '' && state.previousValue !== null) {
+      state.operator = op;
+      render();
+      return;
+    }
+    // 把当前输入确认下来，执行前一个运算
+    if (state.previousValue !== null && state.operator) {
+      const result = compute(state.previousValue, state.operator, parseFloat(state.currentInput));
+      if (!applyResult(result)) return;
+    } else {
+      state.previousValue = parseFloat(state.currentInput);
+    }
+    state.operator = op;
+    state.currentInput = '';
+    state.justEvaluated = false;
+    state.lastOp = null;
+    state.lastOperand = null;
+    render();
+  }
+
+  function equal() {
+    if (state.isError) return;
+    // 场景3：连续按等号（上次也是 equal 且没有新输入）
+    if (state.justEvaluated && state.lastOp && state.lastOperand !== null) {
+      const result = compute(state.previousValue, state.lastOp, state.lastOperand);
+      if (!applyResult(result)) return;
+      render();
+      return;
+    }
+    // 正常等号
+    if (state.previousValue === null || state.operator === null) return;
+    if (state.currentInput === '') return; // 没第二操作数
+    const operand = parseFloat(state.currentInput);
+    const result = compute(state.previousValue, state.operator, operand);
+    // 记录用于连续等号
+    state.lastOp = state.operator;
+    state.lastOperand = operand;
+    if (!applyResult(result)) return;
+    state.justEvaluated = true;
+    state.currentInput = '';
+    render();
+  }
+
+  function compute(a, op, b) {
+    switch (op) {
+      case '+': return a + b;
+      case '-': return a - b;
+      case '*': return a * b;
+      case '/':
+        // 场景1：除以零
+        if (b === 0) return { error: '错误：除数不能为零' };
+        return a / b;
+    }
+    return { error: '未知运算符' };
+  }
+
+  function applyResult(result) {
+    if (result && typeof result === 'object' && result.error) {
+      state.isError = true;
+      state.currentInput = result.error;
+      state.previousValue = null;
+      state.operator = null;
+      state.lastOp = null;
+      state.lastOperand = null;
+      render();
+      return false;
+    }
+    // 场景2：超大数字/溢出检测（超过 MAX_SAFE_INTEGER 或非有限数）
+    if (!isFinite(result) || Math.abs(result) >= 1e16) {
+      // 仍保存原始结果，由 formatNum 转科学计数法
+      state.previousValue = result;
+      state.currentInput = '';
+      return true;
+    }
+    state.previousValue = result;
+    return true;
+  }
+
+  function backspace() {
+    if (state.isError) { clearAll(); return; }
+    if (state.justEvaluated) return;
+    state.currentInput = state.currentInput.slice(0, -1);
+    render();
+  }
+
+  function clearAll() {
+    state.currentInput = '';
+    state.previousValue = null;
+    state.operator = null;
+    state.lastOp = null;
+    state.lastOperand = null;
+    state.justEvaluated = false;
+    state.isError = false;
+    render();
+  }
+
+  function flashHint(msg) {
+    exprEl.textContent = msg;
+    setTimeout(render, 900);
+  }
+
+  // 边界场景一键演示
+  async function runTest(kind) {
+    clearAll();
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    if (kind === 'divzero') {
+      inputDigit('1'); await sleep(120);
+      inputOp('/'); await sleep(120);
+      inputDigit('0'); await sleep(120);
+      equal();
+    } else if (kind === 'overflow') {
+      '9999999999'.split('').forEach((c,i) => setTimeout(() => inputDigit(c), i*40));
+      await sleep(500);
+      inputOp('*'); await sleep(120);
+      '9999999999'.split('').forEach((c,i) => setTimeout(() => inputDigit(c), i*40));
+      await sleep(500);
+      equal();
+    } else if (kind === 'repeatEq') {
+      inputDigit('5'); await sleep(120);
+      inputOp('+'); await sleep(120);
+      inputDigit('3'); await sleep(120);
+      equal(); await sleep(300);
+      equal(); await sleep(300);
+      equal();
+    } else if (kind === 'emptyOp') {
+      inputOp('/'); await sleep(200);
+      inputOp('+'); await sleep(200);
+      inputOp('-');
+    }
+  }
+
+  // 初始化
+  render();
+</script>
+</body>
+</html>
