@@ -165,7 +165,9 @@
     if (state.isError) {
       currEl.textContent = state.currentInput || 'Error';
     } else {
-      currEl.textContent = state.currentInput || (state.previousValue !== null ? state.previousValue : '0');
+      // 等待第二个操作数时显示 0，但保留空输入，避免将删空误当成输入了零。
+      const waitingForInput = state.operator && !state.justEvaluated;
+      currEl.textContent = state.currentInput || (waitingForInput ? '0' : (state.previousValue !== null ? state.previousValue : '0'));
     }
     let expr = '';
     if (state.previousValue !== null && state.operator) {
@@ -188,6 +190,8 @@
   }
 
   function inputDigit(d) {
+    // 鼠标与键盘模块共用入口，只接受单个数字或小数点。
+    if (typeof d !== 'string' || !/^[0-9.]$/.test(d)) return;
     if (state.isError) clearAll();
     if (state.justEvaluated) {
       // 按完等号后输入数字 → 开启新计算
@@ -219,6 +223,9 @@
     // 连续运算符：替换
     if (state.currentInput === '' && state.previousValue !== null) {
       state.operator = op;
+      state.justEvaluated = false;
+      state.lastOp = null;
+      state.lastOperand = null;
       render();
       return;
     }
